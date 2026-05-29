@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ometria RN SDK — New Architecture & SPM Migration Plan</title>
+    <script>
+      /* Set theme before paint to avoid FOUC. Order:
+         1) saved preference, 2) OS preference (handled by media query in CSS). */
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          if (saved === 'light' || saved === 'dark') {
+            document.documentElement.setAttribute('data-theme', saved);
+          }
+        } catch (e) {}
+      })();
+      function toggleTheme() {
+        var html = document.documentElement;
+        var current = html.getAttribute('data-theme');
+        if (!current) {
+          current = window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        var next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('theme', next);
+        } catch (e) {}
+      }
+    </script>
+    <style>
+      /* Light mode (default) — Ometria/Docusaurus palette */
+      :root {
+        --bg: #ffffff;
+        --surface: #f8f8fa;
+        --surface-2: #eef0f4;
+        --border: #e5e7ec;
+        --text: #1e1e3f;
+        --text-dim: #5a5f78;
+        --text-strong: #1e1e3f;
+        --accent: #ff6b6b;
+        --accent-hover: #e55a5a;
+        --accent-2: #1e1e3f;
+        --done: #2ea36b;
+        --progress: #d97e0c;
+        --blocked: #d6293a;
+        --past: #8a91a8;
+
+        --pill-ready-bg: rgba(46, 163, 107, 0.14);
+        --pill-progress-bg: rgba(217, 126, 12, 0.14);
+        --pill-blocked-bg: rgba(214, 41, 58, 0.12);
+        --pill-dead-bg: rgba(138, 145, 168, 0.18);
+
+        --tooltip-bg: #ffffff;
+        --tooltip-border: #d8dce6;
+        --tooltip-shadow: 0 14px 36px rgba(30, 30, 63, 0.18),
+          0 0 0 1px rgba(30, 30, 63, 0.05);
+        --tooltip-code-bg: rgba(255, 107, 107, 0.12);
+
+        --action-bg: rgba(30, 30, 63, 0.04);
+        --code-block-bg: #f5f6f9;
+        --code-block-border: #e0e3eb;
+        --code-block-header-bg: #ebedf2;
+
+        --client-aligned-tint-strong: rgba(46, 163, 107, 0.12);
+        --client-aligned-tint-soft: rgba(46, 163, 107, 0.02);
+        --client-urgent-tint-strong: rgba(214, 41, 58, 0.12);
+        --client-urgent-tint-soft: rgba(214, 41, 58, 0.02);
+
+        --warn-bg: rgba(214, 41, 58, 0.08);
+        --warn-bg-strong: rgba(214, 41, 58, 0.1);
+
+        --wait-zone-bg: rgba(255, 107, 107, 0.06);
+        --wait-zone-border: rgba(255, 107, 107, 0.4);
+
+        --radius: 8px;
+        --mono: 'SF Mono', Menlo, Consolas, monospace;
+
+        color-scheme: light;
+      }
+
+      /* Dark mode — explicit override (matches Docusaurus `[data-theme='dark']`) */
+      [data-theme='dark'] {
+        --bg: #1a1a2e;
+        --surface: #16162a;
+        --surface-2: #111126;
+        --border: #2d2d4f;
+        --text: #f5f5f5;
+        --text-dim: #a8aac0;
+        --text-strong: #ffffff;
+        --accent: #ff6b6b;
+        --accent-hover: #ff8585;
+        --accent-2: #ff8585;
+        --done: #5cc88f;
+        --progress: #f5a623;
+        --blocked: #ff5a6b;
+        --past: #6a6f88;
+
+        --pill-ready-bg: rgba(92, 200, 143, 0.14);
+        --pill-progress-bg: rgba(245, 166, 35, 0.14);
+        --pill-blocked-bg: rgba(255, 90, 107, 0.14);
+        --pill-dead-bg: rgba(106, 111, 136, 0.3);
+
+        --tooltip-bg: #1e1e3f;
+        --tooltip-border: #2c2c5e;
+        --tooltip-shadow: 0 14px 36px rgba(0, 0, 0, 0.55),
+          0 0 0 1px rgba(255, 107, 107, 0.06);
+        --tooltip-code-bg: rgba(255, 107, 107, 0.14);
+
+        --action-bg: rgba(255, 255, 255, 0.05);
+        --code-block-bg: rgba(0, 0, 0, 0.28);
+        --code-block-border: rgba(255, 255, 255, 0.06);
+        --code-block-header-bg: rgba(0, 0, 0, 0.25);
+
+        --client-aligned-tint-strong: rgba(92, 200, 143, 0.12);
+        --client-aligned-tint-soft: rgba(92, 200, 143, 0.02);
+        --client-urgent-tint-strong: rgba(255, 90, 107, 0.14);
+        --client-urgent-tint-soft: rgba(255, 90, 107, 0.02);
+
+        --warn-bg: rgba(255, 90, 107, 0.08);
+        --warn-bg-strong: rgba(255, 90, 107, 0.12);
+
+        --wait-zone-bg: rgba(255, 107, 107, 0.08);
+        --wait-zone-border: rgba(255, 107, 107, 0.45);
+
+        color-scheme: dark;
+      }
+
+      /* OS preference fallback when user hasn't explicitly chosen */
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) {
+          --bg: #1a1a2e;
+          --surface: #16162a;
+          --surface-2: #111126;
+          --border: #2d2d4f;
+          --text: #f5f5f5;
+          --text-dim: #a8aac0;
+          --text-strong: #ffffff;
+          --accent: #ff6b6b;
+          --accent-hover: #ff8585;
+          --accent-2: #ff8585;
+          --done: #5cc88f;
+          --progress: #f5a623;
+          --blocked: #ff5a6b;
+          --past: #6a6f88;
+
+          --pill-ready-bg: rgba(92, 200, 143, 0.14);
+          --pill-progress-bg: rgba(245, 166, 35, 0.14);
+          --pill-blocked-bg: rgba(255, 90, 107, 0.14);
+          --pill-dead-bg: rgba(106, 111, 136, 0.3);
+
+          --tooltip-bg: #1e1e3f;
+          --tooltip-border: #2c2c5e;
+          --tooltip-shadow: 0 14px 36px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(255, 107, 107, 0.06);
+          --tooltip-code-bg: rgba(255, 107, 107, 0.14);
+
+          --action-bg: rgba(255, 255, 255, 0.05);
+          --code-block-bg: rgba(0, 0, 0, 0.28);
+          --code-block-border: rgba(255, 255, 255, 0.06);
+          --code-block-header-bg: rgba(0, 0, 0, 0.25);
+
+          --client-aligned-tint-strong: rgba(92, 200, 143, 0.12);
+          --client-aligned-tint-soft: rgba(92, 200, 143, 0.02);
+          --client-urgent-tint-strong: rgba(255, 90, 107, 0.14);
+          --client-urgent-tint-soft: rgba(255, 90, 107, 0.02);
+
+          --warn-bg: rgba(255, 90, 107, 0.08);
+          --warn-bg-strong: rgba(255, 90, 107, 0.12);
+
+          --wait-zone-bg: rgba(255, 107, 107, 0.08);
+          --wait-zone-border: rgba(255, 107, 107, 0.45);
+
+          color-scheme: dark;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        transition: background-color 0.18s ease, color 0.18s ease;
+      }
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+      }
+
+      /* Theme toggle */
+      .theme-toggle {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 200;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0;
+        transition: background-color 0.18s ease, color 0.18s ease,
+          border-color 0.18s ease;
+      }
+      .theme-toggle:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .theme-toggle .icon-sun {
+        display: inline;
+      }
+      .theme-toggle .icon-moon {
+        display: none;
+      }
+      [data-theme='dark'] .theme-toggle .icon-sun {
+        display: none;
+      }
+      [data-theme='dark'] .theme-toggle .icon-moon {
+        display: inline;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) .theme-toggle .icon-sun {
+          display: none;
+        }
+        :root:not([data-theme]) .theme-toggle .icon-moon {
+          display: inline;
+        }
+      }
+
+      /* Header */
+      header {
+        margin-bottom: 32px;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.15;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+        color: var(--text-strong);
+      }
+      .lede {
+        font-size: 16px;
+        color: var(--text-dim);
+        margin: 0;
+      }
+
+      /* Section */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 0 0 16px;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-strong);
+      }
+      h2::before {
+        content: '';
+        width: 3px;
+        height: 18px;
+        background: var(--accent);
+        border-radius: 2px;
+      }
+      h3 {
+        font-size: 15px;
+        margin: 0 0 6px;
+        color: var(--text);
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 10px;
+        color: var(--text-dim);
+      }
+      p:last-child {
+        margin-bottom: 0;
+      }
+      strong {
+        color: var(--text-strong);
+      }
+
+      /* Status pills */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .pill::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .pill.ready {
+        background: var(--pill-ready-bg);
+        color: var(--done);
+      }
+      .pill.progress {
+        background: var(--pill-progress-bg);
+        color: var(--progress);
+      }
+      .pill.blocked {
+        background: var(--pill-blocked-bg);
+        color: var(--blocked);
+      }
+      .pill.dead {
+        background: var(--pill-dead-bg);
+        color: var(--text-dim);
+      }
+      .pill.warning {
+        background: var(--pill-progress-bg);
+        color: var(--progress);
+      }
+
+      /* Status columns layout — two side-by-side groups */
+      .status-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      @media (max-width: 760px) {
+        .status-columns {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+      }
+
+      /* Status group */
+      .status-group {
+        margin-bottom: 0;
+      }
+      .status-group-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
+        font-weight: 600;
+        margin: 0 0 10px;
+        padding-left: 2px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .status-group-title::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex-shrink: 0;
+      }
+      .status-group.external .status-group-title::before {
+        background: var(--text-dim);
+      }
+      .status-group-title .count {
+        color: var(--text-dim);
+        opacity: 0.6;
+        margin-left: auto;
+        font-weight: 500;
+      }
+
+      /* Status grid — cards stacked vertically within each column */
+      .status-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .status-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+      }
+      .status-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .status-card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.3;
+        flex: 1;
+      }
+      .status-card .line {
+        font-size: 13.5px;
+        color: var(--text-dim);
+        margin: 4px 0 2px;
+        line-height: 1.5;
+      }
+      .status-card .meta {
+        font-size: 12px;
+        color: var(--text-dim);
+        font-family: var(--mono);
+        margin-top: 4px;
+      }
+
+      /* "Why?" hover tooltip — large card that appears next to the trigger */
+      .why-wrap {
+        position: relative;
+        display: inline-block;
+        margin-top: 8px;
+      }
+      .why-trigger {
+        font-size: 12px;
+        color: var(--accent);
+        cursor: help;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 0;
+        user-select: none;
+      }
+      .why-trigger::after {
+        content: '?';
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid currentColor;
+        font-size: 9px;
+        font-weight: 700;
+        opacity: 0.7;
+      }
+      .why-trigger:hover {
+        text-decoration: underline;
+      }
+      .why-wrap:focus-within .why-trigger {
+        text-decoration: underline;
+      }
+
+      .why-tooltip {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        width: 380px;
+        max-width: calc(100vw - 40px);
+        background: var(--tooltip-bg);
+        border: 1px solid var(--tooltip-border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        font-size: 13.5px;
+        color: var(--text-dim);
+        line-height: 1.6;
+        box-shadow: var(--tooltip-shadow);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        transition: opacity 0.15s ease, visibility 0.15s ease,
+          transform 0.15s ease;
+        z-index: 100;
+        pointer-events: none;
+      }
+      .why-wrap:hover .why-tooltip,
+      .why-wrap:focus-within .why-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      /* Arrow pointing up to the trigger */
+      .why-tooltip::before {
+        content: '';
+        position: absolute;
+        top: -6px;
+        left: 18px;
+        width: 10px;
+        height: 10px;
+        background: var(--tooltip-bg);
+        border-top: 1px solid var(--tooltip-border);
+        border-left: 1px solid var(--tooltip-border);
+        transform: rotate(45deg);
+      }
+      .why-tooltip p {
+        margin: 0 0 8px;
+        color: var(--text-dim);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .why-tooltip p:last-child {
+        margin-bottom: 0;
+      }
+      .why-tooltip p strong {
+        color: var(--text-strong);
+      }
+      .why-tooltip code {
+        background: var(--tooltip-code-bg);
+        color: var(--accent);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 12.5px;
+      }
+      .why-tooltip a {
+        color: var(--accent);
+      }
+
+      /* When a card is in the right column, flip the tooltip to align right */
+      .status-group.external .why-tooltip {
+        left: auto;
+        right: 0;
+      }
+      .status-group.external .why-tooltip::before {
+        left: auto;
+        right: 18px;
+      }
+
+      /* Coordination flow */
+      .coord {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+      .coord-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 0;
+      }
+      .coord-row + .coord-row {
+        border-top: 1px dashed var(--border);
+      }
+      .coord-actor {
+        min-width: 220px;
+        font-weight: 600;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .coord-arrow {
+        color: var(--accent);
+        font-size: 14px;
+      }
+      .coord-target {
+        color: var(--text-dim);
+        font-size: 13.5px;
+        flex: 1;
+      }
+
+      /* Action plan */
+      .actions {
+        display: grid;
+        gap: 14px;
+      }
+      .action-phase {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+      }
+      .action-phase.now {
+        border-left: 4px solid var(--progress);
+      }
+      .action-phase.next {
+        border-left: 4px solid var(--accent);
+      }
+      .action-phase.later {
+        border-left: 4px solid var(--past);
+      }
+      .action-phase h3 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+      .action-phase h3 .when {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .action-phase ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+      .action-phase li {
+        margin-bottom: 4px;
+      }
+      .action-phase li:last-child {
+        margin-bottom: 0;
+      }
+
+      /* Client communication — two visual groups */
+      .client-groups {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 760px) {
+        .client-groups {
+          grid-template-columns: 1fr;
+        }
+      }
+      .client-group {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 22px 24px;
+        position: relative;
+        overflow: hidden;
+      }
+      .client-group::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+      .client-group.aligned {
+        background: linear-gradient(
+          135deg,
+          var(--client-aligned-tint-strong),
+          var(--client-aligned-tint-soft) 70%,
+          var(--surface)
+        );
+      }
+      .client-group.aligned::before {
+        background: var(--done);
+      }
+      .client-group.urgent {
+        background: linear-gradient(
+          135deg,
+          var(--client-urgent-tint-strong),
+          var(--client-urgent-tint-soft) 70%,
+          var(--surface)
+        );
+      }
+      .client-group.urgent::before {
+        background: var(--blocked);
+      }
+
+      .client-group-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .client-group-header .pill {
+        font-size: 11px;
+      }
+      .client-group-header h3 {
+        margin: 0;
+        font-size: 17px;
+        color: var(--text-strong);
+        font-weight: 600;
+        flex: 1;
+      }
+      .client-group .action {
+        background: var(--action-bg);
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin: 0 0 12px;
+        font-size: 14px;
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .client-group .action strong {
+        color: var(--accent);
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+      }
+      .client-group .context {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin: 0;
+        line-height: 1.6;
+      }
+      .client-group .context strong {
+        color: var(--text-strong);
+      }
+      .client-group .context + .context {
+        margin-top: 8px;
+      }
+
+      /* Copy-paste message block */
+      .client-message {
+        margin-top: 14px;
+        background: var(--code-block-bg);
+        border: 1px solid var(--code-block-border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .client-message-header {
+        padding: 8px 12px;
+        background: var(--code-block-header-bg);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .client-message-label::before {
+        content: '✉  ';
+        opacity: 0.7;
+      }
+      .copy-btn {
+        background: rgba(255, 107, 107, 0.1);
+        border: 1px solid rgba(255, 107, 107, 0.25);
+        color: var(--accent);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.12s, color 0.12s, border-color 0.12s;
+      }
+      .copy-btn:hover {
+        background: rgba(255, 107, 107, 0.2);
+        color: var(--accent-hover);
+      }
+      .copy-btn.copied {
+        background: rgba(46, 163, 107, 0.15);
+        border-color: rgba(46, 163, 107, 0.35);
+        color: var(--done);
+      }
+      [data-theme='dark'] .copy-btn.copied {
+        background: rgba(92, 200, 143, 0.15);
+        border-color: rgba(92, 200, 143, 0.3);
+      }
+      .client-message pre {
+        margin: 0;
+        padding: 14px 16px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 280px;
+        overflow-y: auto;
+      }
+
+      /* Deadlines table */
+      .deadlines {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .deadlines th,
+      .deadlines td {
+        text-align: left;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13.5px;
+        color: var(--text);
+      }
+      .deadlines th {
+        background: var(--surface-2);
+        color: var(--text-dim);
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .deadlines tr:last-child td {
+        border-bottom: none;
+      }
+      .deadlines td:first-child {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      .deadlines .past td {
+        color: var(--text-dim);
+      }
+      .deadlines .past td:first-child {
+        color: var(--past);
+      }
+      .deadlines .soon td:first-child {
+        color: var(--progress);
+        font-weight: 600;
+      }
+      .deadlines .hard td:first-child {
+        color: var(--blocked);
+        font-weight: 600;
+      }
+      /* "Wait & watch" band — visually distinct from event rows */
+      .deadlines tr.wait-zone td {
+        background: var(--wait-zone-bg);
+        border-top: 1px dashed var(--wait-zone-border);
+        border-bottom: 1px dashed var(--wait-zone-border);
+        font-size: 13px;
+        padding: 12px 14px;
+        color: var(--text);
+      }
+      .deadlines tr.wait-zone .wait-label {
+        display: block;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--accent);
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .deadlines tr.wait-zone td:first-child {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      /* Inline emphasis blocks (used in HTML inline styles) */
+      .warn-block {
+        margin-bottom: 14px;
+        padding: 14px 16px;
+        background: var(--warn-bg-strong);
+        border-radius: 4px;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .warn-block-strong {
+        margin-top: 16px;
+        padding: 14px 16px;
+        background: var(--warn-bg);
+        border-left: 3px solid var(--blocked);
+        border-radius: 4px;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .component-cell {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          sans-serif;
+        font-size: 14px;
+        color: var(--text);
+      }
+      .lede-note {
+        color: var(--text-dim);
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+      .lede-note-small {
+        color: var(--text-dim);
+        margin-bottom: 14px;
+        font-size: 14px;
+      }
+      .small-dim {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      code {
+        background: var(--surface-2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-size: 0.88em;
+        color: var(--accent);
+      }
+
+      footer {
+        margin-top: 60px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      footer details summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--accent);
+      }
+      footer ul {
+        padding-left: 18px;
+        margin: 8px 0 0;
+      }
+      footer li {
+        margin-bottom: 3px;
+      }
+
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 24px;
+        }
+        .container {
+          padding: 28px 16px 56px;
+        }
+        .coord-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+        .coord-actor {
+          min-width: 0;
+        }
+        .theme-toggle {
+          top: 10px;
+          right: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <button
+      class="theme-toggle"
+      type="button"
+      onclick="toggleTheme()"
+      aria-label="Toggle light/dark mode"
+      title="Toggle light/dark mode"
+    >
+      <span class="icon-sun" aria-hidden="true">☀</span>
+      <span class="icon-moon" aria-hidden="true">☾</span>
+    </button>
+    <div class="container">
+      <header>
+        <div class="eyebrow">Internal · Updated May 2026</div>
+        <h1>Ometria RN SDK — New Architecture & SPM Migration Plan</h1>
+        <p class="lede">
+          Where we stand, what's blocking us, and what to do next.<br />
+        </p>
+      </header>
+
+      <section>
+        <div class="status-columns">
+          <div class="status-group ours">
+            <div class="status-group-title">
+              Our SDK <span class="count">4</span>
+            </div>
+            <div class="status-grid">
+              <div class="status-card ready">
+                <div class="status-card-head">
+                  <h3>Ometria iOS SDK (native) — SPM support</h3>
+                  <span class="pill ready">Ready</span>
+                </div>
+                <div class="line">
+                  Already compatible with the new iOS packaging. Old packaging
+                  also works.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">Why this matters</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      The iOS SDK ships a <code>Package.swift</code> file (in
+                      <code>v1.8.9</code>, the version we depend on) — meaning
+                      the prerequisite for switching the React Native SDK to SPM
+                      is already done. The native SDK pulls FirebaseMessaging
+                      via SPM directly, so we're not affected by Firebase
+                      dropping CocoaPods in October 2026.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card progress">
+                <div class="status-card-head">
+                  <h3>Ometria RN SDK — Expo support</h3>
+                  <span class="pill progress">In review</span>
+                </div>
+                <div class="line">
+                  Next release adds Expo support. Code is in review, awaiting
+                  publish.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">Detail</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      Currently published <code>v2.7.1</code> (March 2026)
+                      supports both architectures. The next release
+                      <code>v2.8.0</code> (on the
+                      <code>release/2.8.0</code> branch) adds the Expo plugin
+                      and an Expo sample app. Expo SDK 55, already released, is
+                      new-architecture-only — so this is the supported path for
+                      Expo customers going forward.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card blocked">
+                <div class="status-card-head">
+                  <h3>Ometria RN SDK — SPM mode</h3>
+                  <span class="pill blocked">Blocked</span>
+                </div>
+                <div class="line">
+                  Cannot release yet. Blocked by React Native Firebase needing to update
+                  first.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">Why blocked</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      The SPM mode requires dynamic framework linking. Current React Native Firebase (v25) still mandates
+                      static framework linking. CocoaPods only allows one
+                      linkage setting per project, so both can't coexist.
+                      Shipping the SPM version today would break every client
+                      who also uses React Native Firebase — most of our customer base.
+                    </p>
+                    <p>
+                      We can prepare it on a branch and validate it against
+                      React Native Firebase's preview branch, but cannot release until they
+                      unblock it.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card warning">
+                <div class="status-card-head">
+                  <h3>Ometria — old architecture support</h3>
+                  <span class="pill warning">Through Q3 2026</span>
+                </div>
+                <div class="line">
+                  React Native walked away from it, but
+                  <strong>we still support old-architecture clients</strong>.
+                  Any release we ship through
+                  <strong>end of Q3 2026</strong> will support old
+                  architecture. After that date, new releases drop it.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0"
+                    >Timeline & client impact</span
+                  >
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      <strong>Where it stands upstream:</strong> React Native
+                      froze old architecture in June 2025. Version 0.82 (October
+                      2025) removed the option to disable the new architecture.
+                      Clients on old architecture are pinned to React Native
+                      0.81 or older, and that version is itself now unsupported
+                      by the React Native team.
+                    </p>
+                    <p>
+                      <strong>Our position:</strong> the currently published
+                      Ometria SDK (v2.7.1) supports both architectures. Any
+                      release we ship through
+                      <strong>end of Q3 2026</strong> will continue to
+                      support old architecture — chosen as the cutoff because
+                      it's before Firebase stops publishing to CocoaPods in
+                      October. After that date, any new Ometria release drops
+                      old-architecture support. If we don't ship anything new
+                      between now and the end of Q3 2026, then whatever is currently
+                      published (v2.7.1 today, or v2.8.0 when it lands) remains
+                      the working version for old-architecture clients.
+                    </p>
+                    <p>
+                      <strong>What clients keep:</strong> their existing app and
+                      any Ometria SDK release up to our final
+                      old-architecture-supporting version continue to work. They
+                      lose access to new SDK features, and they cannot update
+                      Firebase/Google Maps on iOS after October 2026.
+                    </p>
+                  </div>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-group external">
+            <div class="status-group-title">
+              External dependencies <span class="count">4</span>
+            </div>
+            <div class="status-grid">
+              <div class="status-card progress">
+                <div class="status-card-head">
+                  <h3>React Native Firebase — SPM support</h3>
+                  <span class="pill progress">In review</span>
+                </div>
+                <div class="line">
+                  Their fix is in active review. Maintainer plans to merge. Some
+                  items still open.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">Status detail</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      PR
+                      <a
+                        href="https://github.com/invertase/react-native-firebase/pull/8933"
+                        target="_blank"
+                        >#8933</a
+                      >
+                      — dual-mode design: SPM by default on recent React Native,
+                      CocoaPods as fallback. The SPM mode uses dynamic framework
+                      linking, which is exactly what our SPM path needs — so the
+                      endpoints are compatible.
+                    </p>
+                    <p>
+                      Opened March 17, 2026. Maintainer (Mike Hardy):
+                      <em
+                        >"Wow! This is pretty amazing… we [will] merge SPM
+                        support."</em
+                      >
+                      External contributor, so timeline depends on review
+                      cycles. Realistic ETA: weeks to a few months.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card blocked">
+                <div class="status-card-head">
+                  <h3>React Native — full SPM move</h3>
+                  <span class="pill blocked">Not shipped</span>
+                </div>
+                <div class="line">
+                  React Native hasn't shipped this yet. The cleanest setup waits
+                  on it.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">Why this matters</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      Until React Native itself ships as a Swift Package, every
+                      project still needs a Podfile and a global linkage
+                      decision. The interim SPM-mode migration moves us from
+                      static to dynamic linking — a big win — but the cleanest
+                      endpoint (no linkage decision at all) waits for this.
+                      React Native 0.84 (Feb 2026) was a major preparatory step.
+                      0.85 (April 2026) did not yet land it. Expected later in
+                      2026.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card warning">
+                <div class="status-card-head">
+                  <h3>CocoaPods — the iOS package system</h3>
+                  <span class="pill warning">Sunsetting</span>
+                </div>
+                <div class="line">
+                  Shutting down. Hard cutoffs in October and December 2026.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0">What changes</span>
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      Existing package versions stay installable; deployed apps
+                      keep working. After October 2026, no new Firebase versions
+                      on CocoaPods. After December 2, 2026, no new packages can
+                      be published to CocoaPods at all, anywhere.
+                    </p>
+                  </div>
+                </span>
+              </div>
+
+              <div class="status-card dead">
+                <div class="status-card-head">
+                  <h3>React Native — old architecture</h3>
+                  <span class="pill dead">Dropped</span>
+                </div>
+                <div class="line">
+                  Dropped by React Native in <strong>June 2025</strong>.
+                  <strong>No security updates</strong> from upstream.
+                  <strong>Does not compile on Xcode 26 out of the box</strong> —
+                  and Xcode 26 has been required by the App Store since April
+                  28, 2026.
+                </div>
+                <span class="why-wrap">
+                  <span class="why-trigger" tabindex="0"
+                    >Why it doesn't compile, and what it would take to fix</span
+                  >
+                  <div class="why-tooltip" role="tooltip">
+                    <p>
+                      The React Native team froze old architecture in June 2025
+                      — no new features, no bug fixes, no security patches.
+                      Version 0.82 (October 2025) removed the option to disable
+                      the new architecture. Version 0.81 was the last release
+                      that ran on old architecture, and it is itself now
+                      unsupported.
+                    </p>
+                    <p>
+                      <strong
+                        >The Xcode 26 build wall (active since April 28,
+                        2026).</strong
+                      >
+                      Apple now requires every App Store submission and update
+                      to be built with Xcode 26 + iOS 26 SDK. Xcode 26 has
+                      multiple confirmed build failures with React Native: FMT
+                      <code>consteval</code> errors, ReactCodegen module errors,
+                      <code>constexpr</code> with Objective-C literal issues,
+                      and most critically — Xcode 26's explicit module scanner
+                      ignores CocoaPods' VFS overlays, breaking the framework
+                      header resolution that
+                      <code>use_frameworks! :linkage => :static</code> (required
+                      by Firebase) relies on.
+                    </p>
+                    <p>
+                      On <strong>new architecture</strong>, these issues are
+                      being patched upstream and worked around in our example
+                      app. On <strong>old architecture</strong>, they are not —
+                      and never will be. A client on old architecture cannot
+                      publish App Store updates without manually applying a
+                      private fork's worth of build patches (Float.h removal,
+                      ReactCommon header copies, FBReactNativeSpec framework
+                      aliasing, Yoga header copies, system-header cleanup,
+                      narrowing-error suppression, and more) — and rediscovering
+                      those patches with every Xcode 26 point release.
+                    </p>
+                    <p>
+                      <strong
+                        >Practical reality: out-of-the-box, old architecture is
+                        no longer publishable to the App Store.</strong
+                      >
+                      Our own stance on still supporting old-architecture
+                      clients through Q3 2026 lives in the "Our SDK" column —
+                      but those clients face a non-trivial iOS build problem we
+                      cannot solve for them.
+                    </p>
+                  </div>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Who's waiting on whom</h2>
+        <div class="coord">
+          <div class="coord-row">
+            <div class="coord-actor">Our SPM release</div>
+            <div class="coord-arrow">→ waiting on</div>
+            <div class="coord-target">
+              React Native Firebase to ship their SPM fix (<a
+                href="https://github.com/invertase/react-native-firebase/pull/8933"
+                target="_blank"
+                >PR in review</a
+              >)
+            </div>
+          </div>
+          <div class="coord-row">
+            <div class="coord-actor">React Native Firebase's SPM fix</div>
+            <div class="coord-arrow">→ pushed by</div>
+            <div class="coord-target">
+              Firebase dropping CocoaPods support in
+              <strong>October 2026</strong>
+            </div>
+          </div>
+          <div class="coord-row">
+            <div class="coord-actor">Every iOS package author</div>
+            <div class="coord-arrow">→ pushed by</div>
+            <div class="coord-target">
+              CocoaPods going read-only on <strong>December 2, 2026</strong>
+            </div>
+          </div>
+          <div class="coord-row">
+            <div class="coord-actor">A fully clean iOS setup</div>
+            <div class="coord-arrow">→ waiting on</div>
+            <div class="coord-target">
+              React Native shipping its full SPM migration (expected later 2026)
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Client communication</h2>
+        <p class="lede-note">
+          Two client groups. Different urgency, but each only needs one clear
+          message.
+        </p>
+        <div class="client-groups">
+          <div class="client-group aligned">
+            <div class="client-group-header">
+              <h3>Clients on new architecture</h3>
+              <span class="pill ready">On track</span>
+            </div>
+            <p class="context">
+              They're architecturally aligned but still using CocoaPods.
+              <strong>No action right now</strong> — but as React Native and
+              React Native Firebase ship full SPM support through 2026, they'll need to
+              upgrade to pick it up before the December 2026 CocoaPods read-only date
+              and the Q1 2027 Ometria SDK minimum-version cutover.
+            </p>
+
+            <div class="client-message">
+              <div class="client-message-header">
+                <span class="client-message-label">Ready-to-send message</span>
+                <button
+                  class="copy-btn"
+                  onclick="navigator.clipboard.writeText(this.closest('.client-message').querySelector('pre').textContent).then(()=>{this.textContent='Copied ✓';this.classList.add('copied');setTimeout(()=>{this.textContent='Copy';this.classList.remove('copied')},1800)})"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre>
+Hi [Client],
+
+Quick heads-up on the React Native iOS migration happening across the ecosystem this year.
+
+Your app is on React Native's new architecture — that's the right place to be. No urgent action needed right now, but a few things to keep on your radar:
+
+• Since you use React Native Firebase: their Swift Package Manager (SPM) support is in preview. SPM is replacing CocoaPods as the iOS package system. Firebase stops publishing to CocoaPods in October 2026 — update React Native Firebase to a version with SPM support by then.
+• Keep your React Native version current: RN is finishing its iOS migration to SPM. CocoaPods goes read-only on December 2, 2026 — by then you'll need an RN version with full SPM support.
+• From Q1 2027, new Ometria SDK iOS releases will require RN and React Native Firebase versions with full SPM support.
+
+Your current Ometria SDK integration doesn't need any changes today. We'll keep you posted as the ecosystem evolves.
+
+Best,
+The Ometria team</pre
+              >
+            </div>
+          </div>
+
+          <div class="client-group urgent">
+            <div class="client-group-header">
+              <h3>Clients on old architecture</h3>
+              <span class="pill blocked">Migrate now</span>
+            </div>
+            <p class="context">
+              Already past the Apple Xcode 26 deadline (April 28, 2026): old
+              architecture doesn't compile out of the box, and only ships to the
+              App Store via manual private patches. Firebase removes CocoaPods
+              support in October 2026.
+            </p>
+            <p class="context">
+              <strong>Clients on very old React Native (≤ 0.75)</strong> face
+              two upgrades in one (React Native version + architecture) and
+              should be flagged for immediate attention.
+            </p>
+
+            <div class="client-message">
+              <div class="client-message-header">
+                <span class="client-message-label">Ready-to-send message</span>
+                <button
+                  class="copy-btn"
+                  onclick="navigator.clipboard.writeText(this.closest('.client-message').querySelector('pre').textContent).then(()=>{this.textContent='Copied ✓';this.classList.add('copied');setTimeout(()=>{this.textContent='Copy';this.classList.remove('copied')},1800)})"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre>
+Hi [Client],
+
+Your iOS App Store updates need a one-time migration to keep shipping cleanly. Here's why, and what's involved.
+
+Since April 28, 2026, Apple requires Xcode 26 for every App Store submission. Your app uses React Native's old architecture, which doesn't compile cleanly on Xcode 26 — and the React Native team dropped old architecture entirely in June 2025, so no upstream fix is coming. Shipping updates today means maintaining private build patches that break with each Xcode point release.
+
+The migration, done in one effort:
+1. Move to React Native's new architecture
+2. Upgrade React Native to the latest stable version (0.85+)
+3. Upgrade to a current Ometria SDK release
+
+After that, three deadlines shape the rest of 2026 and early 2027:
+• Since you use React Native Firebase: their Swift Package Manager (SPM) support is in preview. SPM is replacing CocoaPods as the iOS package system. Firebase stops publishing to CocoaPods in October 2026 — update React Native Firebase to a version with SPM support by then.
+• Keep your React Native version current: RN is finishing its iOS migration to SPM. CocoaPods goes read-only on December 2, 2026 — by then you'll need an RN version with full SPM support.
+• From Q1 2027, new Ometria SDK iOS releases will require RN and React Native Firebase versions with full SPM support.
+
+On the Ometria SDK side: any release we ship through end of Q3 2026 continues to support old architecture. After that date, new Ometria releases are new-architecture only. Existing Ometria SDK versions remain installable, but no longer receive new features or fixes.
+
+Best,
+The Ometria team</pre
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>If a client stays on old architecture — what gets frozen</h2>
+        <p class="lede-note-small">
+          A client who refuses to migrate keeps a working app, but the entire
+          stack stops moving forward. Here's exactly what gets locked in place
+          and when.
+        </p>
+        <p class="warn-block">
+          <strong
+            >⚠ Active since April 28, 2026 — old architecture is effectively
+            unpublishable to the App Store out of the box.</strong
+          >
+          Apple requires Xcode 26 + iOS 26 SDK for every submission and update.
+          Old-architecture React Native does not compile on Xcode 26 out of the
+          box, and there are no upstream fixes coming. A client on old
+          architecture can only ship updates by manually maintaining a private
+          fork's worth of build patches — and rediscovering them with every
+          Xcode 26 point release. This is now the most immediate blocker, ahead
+          of the Firebase and CocoaPods deadlines later in the year.
+        </p>
+        <table class="deadlines">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Frozen at</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="component-cell">Ometria SDK</td>
+              <td>
+                Whatever Ometria release exists at the
+                <strong>end of Q3 2026</strong><br /><span class="small-dim"
+                  >(could be <code>v2.7.1</code> if no newer release ships
+                  before then)</span
+                >
+              </td>
+              <td>
+                Our cutoff date for old architecture, set before Firebase
+                removes CocoaPods support in October. Anything we publish after
+                Q3 2026 drops old-architecture support.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">React Native</td>
+              <td>0.81 (or older)</td>
+              <td>
+                0.82 removed the option to disable new architecture. 0.81 is the
+                last version that runs old architecture, and 0.81 is itself
+                already unsupported.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">Firebase iOS SDK</td>
+              <td>The version available in October 2026</td>
+              <td>
+                Firebase stops publishing to CocoaPods in October 2026. New
+                versions only come via SPM, which old architecture cannot use.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">Google Maps SDK</td>
+              <td>The version available end of Q2 2026</td>
+              <td>
+                Same reason as Firebase. Google Maps moved to SPM-only after Q2
+                2026.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">Every other iOS dependency</td>
+              <td>Whatever was published by December 2, 2026</td>
+              <td>
+                CocoaPods trunk goes read-only globally on that date.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">Expo support</td>
+              <td>Not available at all</td>
+              <td>
+                Expo SDK 55 (and onward) is new-architecture-only. There is no
+                Expo path for old architecture.
+              </td>
+            </tr>
+            <tr>
+              <td class="component-cell">Security patches</td>
+              <td>None going forward</td>
+              <td>
+                React Native, Firebase, and Google Maps all stop patching the
+                old paths. Any security issue discovered after the cutoffs
+                cannot be fixed.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="warn-block-strong">
+          <strong>The bottom line for these clients:</strong> their app keeps
+          running, but it becomes a museum piece. Any new iOS version, any App
+          Store policy change, any security disclosure — they have no way to
+          react. The deeper they go past December 2026, the more expensive the
+          eventual rescue becomes.
+        </p>
+      </section>
+
+      <section>
+        <h2>Hard deadlines</h2>
+        <table class="deadlines">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Event</th>
+              <th>Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="past">
+              <td>Jun 2025</td>
+              <td>Old architecture frozen by React Native</td>
+              <td>No more old-architecture fixes from React Native</td>
+            </tr>
+            <tr class="past">
+              <td>Oct 2025</td>
+              <td>React Native makes new architecture mandatory</td>
+              <td>Cannot upgrade React Native past 0.81 on old architecture</td>
+            </tr>
+            <tr class="past">
+              <td>Feb 2026</td>
+              <td>Last old-arch React Native line drops out of support</td>
+              <td>
+                Old architecture clients are on an unsupported React Native
+              </td>
+            </tr>
+            <tr class="past">
+              <td>Apr 2026</td>
+              <td>
+                Latest React Native shipped — still uses old iOS packaging
+              </td>
+              <td>Even the newest version doesn't yet have full SPM support</td>
+            </tr>
+            <tr class="hard">
+              <td>Apr 28, 2026</td>
+              <td>
+                Apple mandates Xcode 26 + iOS 26 SDK for every App Store
+                submission
+              </td>
+              <td>
+                Old-architecture clients now need to maintain their own Xcode 26
+                build workarounds to ship updates at all
+              </td>
+            </tr>
+            <tr class="soon">
+              <td>Q2 2026</td>
+              <td>Google Maps stops publishing to CocoaPods</td>
+              <td>iOS clients using Google Maps stop getting updates</td>
+            </tr>
+            <tr class="soon">
+              <td>End of Q3 2026</td>
+              <td>Ometria SDK stops supporting old architecture</td>
+              <td>
+                Any release shipped after this date drops old-architecture
+                support; older releases remain installable
+              </td>
+            </tr>
+            <tr class="wait-zone">
+              <td>Q4 2026</td>
+              <td>Wait, watch &amp; implement</td>
+              <td>
+                Likely no new Ometria RN releases — Firebase stops publishing to CocoaPods
+                in October and CocoaPods itself goes read-only on December 2,
+                closing the CocoaPods path by year-end. We prepare the SPM-mode
+                release on a branch and monitor upstream (React Native Firebase
+                shipping SPM support, React Native completing its full SPM
+                migration). Ready to ship the moment both land.
+              </td>
+            </tr>
+            <tr class="soon">
+              <td>Oct 2026</td>
+              <td>Firebase stops publishing to CocoaPods</td>
+              <td>Main pressure point for our migration and React Native Firebase's</td>
+            </tr>
+            <tr class="hard">
+              <td>Dec 2, 2026</td>
+              <td>CocoaPods trunk goes read-only globally</td>
+              <td>No new iOS packages can be published anywhere after this</td>
+            </tr>
+            <tr class="hard">
+              <td>Q1 2027</td>
+              <td>Ometria SDK goes full SPM</td>
+              <td>
+                New Ometria releases require SPM-capable React Native and
+                React Native Firebase. Older setups stay pinned to their last compatible
+                release.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Action plan</h2>
+        <p class="lede-note-small">
+          Internal SDK team milestones, by phase.
+        </p>
+        <div class="actions">
+          <div class="action-phase now">
+            <h3>
+              Now — independent of anyone else <span class="when">Q2 2026</span>
+            </h3>
+            <ul>
+              <li>
+                <strong>Publish the Expo support release</strong> (v2.8.0). Code
+                is ready, no external blockers.
+              </li>
+              <li>
+                <strong
+                  >Announce the cutoff date for old-architecture
+                  support.</strong
+                >
+                Recommended: <strong>end of Q3 2026</strong>. Any release we
+                ship up to that date supports old architecture; releases after
+                that date drop it. (We're committing to a date, not to a
+                specific release on that date.)
+              </li>
+              <li>
+                <strong>Sort clients by where they stand</strong> (see "Client
+                communication" above). Identify who needs an early migration
+                push.
+              </li>
+              <li>
+                <strong>Write the client message</strong> using the two groups
+                in the Client Communication section above.
+              </li>
+              <li>
+                <strong>Prepare the SPM-mode release on a branch.</strong>
+                Validate it against React Native Firebase's preview branch so we're ready
+                to ship the moment they do.
+              </li>
+            </ul>
+          </div>
+
+          <div class="action-phase next">
+            <h3>
+              When React Native Firebase ships their SPM fix
+              <span class="when">Q3–Q4 2026</span>
+            </h3>
+            <ul>
+              <li>
+                <strong>Ship our SPM-mode release.</strong> Most of the
+                static-framework pain goes away for clients in one release
+                cycle.
+              </li>
+              <li>
+                <strong>Update the Expo plugin</strong> to use the new linking
+                mode.
+              </li>
+              <li>
+                <strong
+                  >Remove most of the Xcode 26 workarounds we've been
+                  carrying.</strong
+                >
+                One small workaround remains.
+              </li>
+            </ul>
+          </div>
+
+          <div class="action-phase later">
+            <h3>
+              When React Native ships its full SPM move
+              <span class="when">Later 2026 → Q1 2027</span>
+            </h3>
+            <ul>
+              <li>
+                <strong>Bump Ometria SDK major version</strong> with
+                minimum-version requirements: React Native with full SPM support
+                + React Native Firebase v26+ (SPM-capable). Tentative: Q1 2027.
+              </li>
+              <li>
+                Eliminate the linking-mode setting from the project entirely.
+              </li>
+              <li>Move off CocoaPods completely.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <details>
+          <summary>Sources & references</summary>
+          <ul>
+            <li>
+              <a
+                href="https://developer.apple.com/news/upcoming-requirements/"
+                target="_blank"
+                >Apple Developer — Upcoming Requirements (Xcode 26 + iOS 26 SDK
+                mandate, April 28, 2026)</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/invertase/react-native-firebase/pull/8933"
+                target="_blank"
+                >React Native Firebase PR #8933 — dual SPM/CocoaPods support</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/invertase/react-native-firebase/issues/9010"
+                target="_blank"
+                >React Native Firebase #9010 — tracking issue, Oct 2026 Firebase
+                deadline</a
+              >
+            </li>
+            <li>
+              <a href="https://rnfirebase.io/" target="_blank"
+                >rnfirebase.io — current docs mandate
+                <code>useFrameworks: static</code></a
+              >
+            </li>
+            <li>
+              <a
+                href="https://reactnative.dev/blog/2025/10/08/react-native-0.82"
+                target="_blank"
+                >RN 0.82 release — New Arch only</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://reactnative.dev/blog/2026/04/07/react-native-0.85"
+                target="_blank"
+                >RN 0.85 release — no SPM yet</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/reactwg/react-native-new-architecture/discussions/290"
+                target="_blank"
+                >Legacy Architecture freeze (reactwg #290)</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://docs.expo.dev/guides/new-architecture/"
+                target="_blank"
+                >Expo New Architecture guide</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://blog.cocoapods.org/CocoaPods-Specs-Repo/"
+                target="_blank"
+                >CocoaPods read-only plan</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://firebase.google.com/docs/ios/cocoapods-deprecation"
+                target="_blank"
+                >Firebase migrate from CocoaPods</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/facebook/react-native/issues/46503"
+                target="_blank"
+                >facebook/react-native#46503 —
+                <code>spm_dependency</code> usage</a
+              >
+            </li>
+          </ul>
+        </details>
+      </footer>
+    </div>
+  </body>
+</html>
